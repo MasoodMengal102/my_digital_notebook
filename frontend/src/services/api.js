@@ -1,5 +1,11 @@
-// API client for Crystal Notebook backend
-const BASE_URL = '/api';
+// Centralized API client for Crystal Notebook backend
+const rawApiUrl = import.meta.env.VITE_API_URL;
+let BASE_URL = '/api';
+
+if (rawApiUrl && typeof rawApiUrl === 'string' && rawApiUrl.trim() !== '') {
+  const trimmed = rawApiUrl.trim().replace(/\/+$/, '');
+  BASE_URL = trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+}
 
 function getAuthHeader() {
   const token = localStorage.getItem('crystal_token');
@@ -55,7 +61,7 @@ async function request(endpoint, options = {}) {
     return await response.json();
   } catch (error) {
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new Error('Unable to connect to the backend server. Please verify the API is running on port 8000.');
+      throw new Error('Unable to connect to the backend server. Please check your network connection or try again shortly.');
     }
     console.error(`API Error on ${endpoint}:`, error);
     throw error;

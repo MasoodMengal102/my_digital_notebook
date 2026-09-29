@@ -1,26 +1,32 @@
+import os
+import traceback
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-from contextlib import asynccontextmanager
-import traceback
 
 from app.config import settings
 from app.database import engine, Base, SessionLocal
 from app.services.seed_data import seed_database
+
+# Ensure all SQLAlchemy models are registered
+import app.models
 
 # Routers
 from app.routers import auth, notes, tasks, reminders, classes, events, planner, search, stats, settings as settings_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize tables
+    # Initialize all database tables
     Base.metadata.create_all(bind=engine)
     
-    # Auto-seed initial demo user and data
+    # Auto-seed initial demo user and data safely
     db = SessionLocal()
     try:
         seed_database(db)
+    except Exception as e:
+        print(f"Warning: Demo seeding skipped or already present: {e}")
     finally:
         db.close()
     yield
@@ -35,7 +41,6 @@ app = FastAPI(
 # Exception Handlers
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    # Format human-readable string without non-serializable exception objects
     messages = []
     for err in exc.errors():
         field_loc = " -> ".join(str(l) for l in err.get("loc", []) if l != "body")
@@ -52,20 +57,22 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
-    print("UNHANDLED SERVER ERROR:", exc)
+    print(f"UNHANDLED SERVER ERROR on {request.method} {request.url.path}: {exc}")
     traceback.print_exc()
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": f"Internal Server Error: {str(exc)}"}
+        content={"detail": "Internal server error. Please try again later."}
     )
 
-# CORS configuration
+# CORS configuration for production and local development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=settings.cors_origins,
+    allow_origin_regex=r"https://.*\.onrender\.com",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # Register API Routers
@@ -87,9 +94,21 @@ def root():
         "tagline": "Write. Plan. Remember. Achieve.",
         "version": settings.VERSION,
         "status": "online",
+        "health_url": "/health",
         "docs_url": "/docs"
     }
 
-@app.get(f"{settings.API_PREFIX}/health")
+@app.get("/health", tags=["Health"])
 def health_check():
-    return {"status": "healthy", "service": settings.PROJECT_NAME}
+    """Production health check for Render monitoring."""
+    return {"status": "ok"}
+
+@app.get(f"{settings.API_PREFIX}/health", tags=["Health"])
+def api_health_check():
+    return {"status": "ok", "service": settings.PROJECT_NAME}
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=False)
+

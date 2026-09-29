@@ -3,16 +3,38 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from app.config import settings
 
-# Adjust connection args for SQLite
-connect_args = {}
-if settings.DATABASE_URL.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
+def normalize_database_url(url: str) -> str:
+    """
+    Normalizes database connection URLs for SQLAlchemy.
+    Specifically converts Render PostgreSQL URLs that start with 'postgres://'
+    to 'postgresql://' as required by SQLAlchemy 1.4+.
+    """
+    if not url:
+        return "sqlite:///./crystal_notebook.db"
+    clean_url = url.strip()
+    if clean_url.startswith("postgres://"):
+        return clean_url.replace("postgres://", "postgresql://", 1)
+    return clean_url
 
-engine = create_engine(
-    settings.DATABASE_URL,
-    connect_args=connect_args,
-    pool_pre_ping=True
-)
+normalized_db_url = normalize_database_url(settings.DATABASE_URL)
+
+if normalized_db_url.startswith("sqlite"):
+    connect_args = {"check_same_thread": False}
+    engine = create_engine(
+        normalized_db_url,
+        connect_args=connect_args,
+        pool_pre_ping=True
+    )
+else:
+    # Production PostgreSQL connection configuration
+    engine = create_engine(
+        normalized_db_url,
+        connect_args={},
+        pool_pre_ping=True,
+        pool_size=10,
+        max_overflow=20,
+        pool_recycle=300
+    )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -24,3 +46,4 @@ def get_db():
         yield db
     finally:
         db.close()
+
