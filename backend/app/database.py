@@ -6,15 +6,18 @@ from app.config import settings
 def normalize_database_url(url: str) -> str:
     """
     Normalizes database connection URLs for SQLAlchemy.
-    Specifically converts Render PostgreSQL URLs that start with 'postgres://'
-    to 'postgresql://' as required by SQLAlchemy 1.4+.
+    Converts Render PostgreSQL URLs starting with 'postgres://' or 'postgresql://'
+    to 'postgresql+psycopg2://' to ensure the installed psycopg2 driver is used.
     """
     if not url:
         return "sqlite:///./crystal_notebook.db"
     clean_url = url.strip()
     if clean_url.startswith("postgres://"):
-        return clean_url.replace("postgres://", "postgresql://", 1)
+        return clean_url.replace("postgres://", "postgresql+psycopg2://", 1)
+    if clean_url.startswith("postgresql://"):
+        return clean_url.replace("postgresql://", "postgresql+psycopg2://", 1)
     return clean_url
+
 
 normalized_db_url = normalize_database_url(settings.DATABASE_URL)
 
