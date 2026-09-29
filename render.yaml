@@ -20,10 +20,7 @@ services:
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: FRONTEND_URL
-        fromService:
-          type: web
-          name: crystal-notebook-web
-          property: url
+        value: https://crystal-notebook-web.onrender.com
 
   # ============================================================================
   # Frontend React/Vite Static Site
@@ -40,10 +37,7 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
-        fromService:
-          type: web
-          name: crystal-notebook-api
-          property: url
+        value: https://crystal-notebook-api.onrender.com
 
 # ==============================================================================
 # Managed PostgreSQL Database
